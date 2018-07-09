@@ -1,0 +1,47 @@
+{
+  "name": "falexa",
+  "version": "1.0.0",
+  "description": "Create your own verbal commands that map to custom Javascript functions",
+  "engineStrict": true,
+  "engines": {
+    "node": ">= 8.9.0"
+  },
+  "devDependencies": {
+    "@types/jest": "~22.2.3",
+    "@types/node": "~8.10.10",
+    "jest": "~22.4.3",
+    "rimraf": "~2.6.2",
+    "ts-jest": "~22.4.4",
+    "tslint": "~5.9.1",
+    "tslint-microsoft-contrib": "~5.0.3",
+    "tsutils": "~2.26.2",
+    "typescript": "~2.8.3",
+    "uglifyjs": "^2.4.11",
+    "babel-jest": "^23.0.1"
+  },
+  "scripts": {
+    "clean": "rimraf coverage build tmp dist",
+    "build": "npm run build:ts && npm run build:browserify && npm run build:min",
+    "build:ts": "tsc -p tsconfig.release.json",
+    "build:browserify": "cd ./build && browserify ./src/browser.js --standalone Falexa -o ../dist/falexa.browser.js",
+    "build:min": "uglifyjs ./dist/falexa.browser.js -o ./dist/falexa.browser.min.js --compress",
+    "deploy-dry": "npm run build & npm run lint & npm run test && git status",
+    "watch": "tsc -w -p tsconfig.release.json",
+    "lint": "tslint -t stylish --project \"tsconfig.json\"",
+    "pretest": "npm run lint",
+    "test": "npm run test-only",
+    "test-only": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "author": "Eric <git@letsmakeit.com>",
+  "license": "APLv2",
+  "dependencies": {
+    "@types/lodash": "^4.14.109",
+    "browserify": "^16.2.2",
+    "falexa": "^1.0.0",
+    "lodash": "^4.1.1",
+    "peerjs": "^0.3.14",
+    "tslib": "~1.9.0",
+    "uglify-es": "^3.3.9"
+  }
+}
