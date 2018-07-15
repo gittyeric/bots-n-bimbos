@@ -1,7 +1,4 @@
-export interface NameToId {
-    [index: string]: number,
-}
-
-export interface BimboSettings {
-    nameToId: NameToId
+export interface BimboConnection {
+    destroy(): void,
+    setMuted(muted: boolean): void,
 }

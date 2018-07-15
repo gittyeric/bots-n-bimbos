@@ -1,24 +1,32 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.BotsNBimbos = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
+easyrtc.setSocketUrl(":9000");
 const call = (calleeId) => {
     easyrtc.call(calleeId, () => {
         console.log("Successfully called " + calleeId);
     }, (e) => {
-        alert(JSON.stringify(e));
+        if (e !== 'ALREADY_CONNECTED') {
+            alert(JSON.stringify(e));
+        }
+        else {
+            console.warn('Warning: Already connected');
+        }
     });
 };
 const connect = () => {
     easyrtc.enableVideo(false);
     easyrtc.enableVideoReceive(false);
+    let mediaSource = null;
     easyrtc.setStreamAcceptor((easyrtcid, stream) => {
         console.log('Accepting stream ' + easyrtcid);
-        var audio = document.createElement('audio');
-        document.getElementById("body").appendChild(audio);
+        var audio = document.createElement('video');
+        document.body.appendChild(audio);
         easyrtc.setVideoObjectSrc(audio, stream);
     });
-    easyrtc.initMediaSource(() => {
+    easyrtc.initMediaSource((loadedMediaSource) => {
         easyrtc.connect("easyrtc.audioOnly", (easyId) => {
             console.log('Connected as ' + easyId);
+            mediaSource = loadedMediaSource;
         }, (err) => {
             alert(JSON.stringify(err));
         });
@@ -32,6 +40,12 @@ const connect = () => {
         destroy: () => {
             easyrtc.hangupAll();
             easyrtc.disconnect();
+        },
+        setMuted: (mute) => {
+            if (mediaSource) {
+                mediaSource.getVideoTracks()[0].enabled = !mute;
+                mediaSource.getAudioTracks()[0].enabled = !mute;
+            }
         },
     };
 };
@@ -51,39 +65,33 @@ module.exports = { createBotsAndBimbos: index_1.createBotsAndBimbos, FAlexa };
 Object.defineProperty(exports, "__esModule", { value: true });
 const connect = (require('./bimboConnection').connect);
 exports.createBotsAndBimbos = (falexa) => {
-    let connection = null;
+    let connection = connect();
+    let muteOnBotListen = false;
     const stopHandler = () => {
-        connect()
-            .then((newCon) => {
-            connection = newCon;
-        })
-            .catch((e) => {
-            throw e;
-        });
+        if (connection !== null && muteOnBotListen) {
+            connection.setMuted(false);
+        }
         falexa.offListenStop(stopHandler);
     };
-    return connect()
-        .then((con) => {
-        connection = con;
-        return {
-            startBotListener: () => {
-                if (connection !== null) {
-                    falexa.offListenStop(stopHandler);
-                    falexa.onListenStop(stopHandler);
-                }
-                falexa.startListening();
-            },
-            destroy: () => {
-                if (connection !== null) {
-                    connection.destroy();
-                    connection = null;
-                }
-            },
-        };
-    })
-        .catch((e) => {
-        throw e;
-    });
+    return {
+        startBotListener: () => {
+            if (connection !== null && muteOnBotListen) {
+                connection.setMuted(true);
+            }
+            falexa.offListenStop(stopHandler);
+            falexa.onListenStop(stopHandler);
+            falexa.startListening();
+        },
+        destroy: () => {
+            if (connection !== null) {
+                connection.destroy();
+                connection = null;
+            }
+        },
+        setMuteOnListen: (muteOnListen) => {
+            muteOnBotListen = muteOnListen;
+        },
+    };
 };
 
 },{"./bimboConnection":1}],4:[function(require,module,exports){
