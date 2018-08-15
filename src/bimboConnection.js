@@ -2,6 +2,7 @@
 easyrtc.setSocketUrl(":9000");
 
 const call = (calleeId) => {
+    console.log("Calling " + calleeId);
     easyrtc.call(calleeId, () => {
         console.log("Successfully called " + calleeId);
     }, (e) => {
@@ -9,7 +10,7 @@ const call = (calleeId) => {
             alert(JSON.stringify(e));
         }
         else {
-            console.warn('Warning: Already connected');
+            console.warn('Warning: Already connected ' + calleeId);
         }
     })
 };
@@ -49,7 +50,6 @@ const connect = () => {
         },
         setMuted: (mute) => {
             if (mediaSource) {
-                mediaSource.getVideoTracks()[0].enabled = !mute
                 mediaSource.getAudioTracks()[0].enabled = !mute
             }
         },

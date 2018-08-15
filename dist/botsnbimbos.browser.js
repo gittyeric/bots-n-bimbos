@@ -2,6 +2,7 @@
 "use strict";
 easyrtc.setSocketUrl(":9000");
 const call = (calleeId) => {
+    console.log("Calling " + calleeId);
     easyrtc.call(calleeId, () => {
         console.log("Successfully called " + calleeId);
     }, (e) => {
@@ -9,7 +10,7 @@ const call = (calleeId) => {
             alert(JSON.stringify(e));
         }
         else {
-            console.warn('Warning: Already connected');
+            console.warn('Warning: Already connected ' + calleeId);
         }
     });
 };
@@ -43,7 +44,6 @@ const connect = () => {
         },
         setMuted: (mute) => {
             if (mediaSource) {
-                mediaSource.getVideoTracks()[0].enabled = !mute;
                 mediaSource.getAudioTracks()[0].enabled = !mute;
             }
         },
@@ -64,7 +64,7 @@ module.exports = { createBotsAndBimbos: index_1.createBotsAndBimbos, FAlexa };
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const connect = (require('./bimboConnection').connect);
-exports.createBotsAndBimbos = (falexa) => {
+exports.createBotsAndBimbos = (falexa, recognizer = undefined) => {
     let connection = connect();
     let muteOnBotListen = false;
     const stopHandler = () => {
@@ -80,7 +80,7 @@ exports.createBotsAndBimbos = (falexa) => {
             }
             falexa.offListenStop(stopHandler);
             falexa.onListenStop(stopHandler);
-            falexa.startListening();
+            return falexa.listen(recognizer);
         },
         destroy: () => {
             if (connection !== null) {
@@ -1440,36 +1440,40 @@ for (var i = 0; i < DOMIterables.length; i++) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var interpretter_1 = require("./phonetic/interpretter");
-var defaultSpeaker = require('./io/speech').defaultSpeaker;
+var speech_1 = require("./io/speech");
 var newRecognizerFactory = require('./io/recognition').newRecognizerFactory;
 var getDefaultRecognition = require('./io/recognition').getDefaultRecognition;
-exports.createFalexa = function (cmds, speaker, sentenceSource, debugLogger) {
+exports.createFalexa = function (cmds, speaker, debugLogger) {
+    if (speaker === void 0) { speaker = console.log; }
+    if (debugLogger === void 0) { debugLogger = console.log; }
     var interpretter = interpretter_1.newInterpretter(cmds);
     var stopHandlers = [];
-    sentenceSource.onend = function () {
-        stopHandlers.forEach(function (handler) { return handler(); });
-    };
     var sentenceHandler = function (sentencePossibilities) {
-        debugLogger("Heard '" + sentencePossibilities[0] + "'");
+        debugLogger("HEARD: '" + sentencePossibilities[0] + "'");
         interpretter = interpretter.interpret(sentencePossibilities[0]);
-        debugLogger("\"" + interpretter.getOutputMessage() + "\"");
+        debugLogger("SPEAK: \"" + interpretter.getOutputMessage() + "\"");
         speaker(interpretter.getOutputMessage());
     };
-    var recognizer = newRecognizerFactory(sentenceSource)(sentenceHandler);
     return {
         speak: function (toSay) {
-            debugLogger("\"" + toSay + "\"");
+            debugLogger("FORCE: \"" + toSay + "\"");
             speaker(toSay);
         },
         hear: function (sentences) {
             sentenceHandler(sentences);
             return interpretter.getOutputMessage();
         },
-        startListening: function () {
+        listen: function (recognition) {
+            var validRecognition = recognition !== undefined ?
+                recognition :
+                getDefaultRecognition();
+            validRecognition.onend = function () {
+                stopHandlers.forEach(function (handler) { return handler(); });
+            };
+            validRecognition.abort();
+            var recognizer = newRecognizerFactory(validRecognition)(sentenceHandler);
             recognizer.start();
-        },
-        stopListening: function () {
-            recognizer.stop();
+            return recognizer;
         },
         onListenStop: function (handler) {
             stopHandlers.push(handler);
@@ -1479,9 +1483,10 @@ exports.createFalexa = function (cmds, speaker, sentenceSource, debugLogger) {
         },
     };
 };
-exports.falexa = function (cmds, speaker) {
-    if (speaker === void 0) { speaker = defaultSpeaker(); }
-    return exports.createFalexa(cmds, speaker, getDefaultRecognition(), console.log);
+exports.falexa = function (cmds, speaker, debugLogger) {
+    if (speaker === void 0) { speaker = speech_1.defaultSpeaker(); }
+    if (debugLogger === void 0) { debugLogger = console.log; }
+    return exports.createFalexa(cmds, speaker, debugLogger);
 };
 
 },{"./io/recognition":93,"./io/speech":94,"./phonetic/interpretter":103}],92:[function(require,module,exports){
@@ -1507,18 +1512,25 @@ exports.Examples = {
 
 },{"./falexa":91,"./io/recognition":93,"./io/speech":94,"./phonetic":101,"./phonetic/examples/calculator/cmd":95,"./phonetic/examples/note/cmd":96,"./phonetic/examples/timer/cmd":98,"./phonetic/examples/weightConverter/cmd":100,"tslib":117}],93:[function(require,module,exports){
 "use strict";
+var _defaultRecognition = null;
 var getDefaultRecognition = function () {
+    if (_defaultRecognition) {
+        return _defaultRecognition;
+    }
     var RecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     var recognition = new RecognitionClass();
     recognition.lang = 'en-US';
     recognition.interimResults = false;
     recognition.maxAlternatives = 3;
     recognition.continuous = false;
+    _defaultRecognition = recognition;
     return recognition;
 };
 var newRecognizerFactory = function (recognition) {
     if (recognition === void 0) { recognition = getDefaultRecognition(); }
+    var isListening = false;
     return function (incomingSentencesHandler) {
+        var endListeningHandler = function () { };
         var resultHandler = function (event) {
             var sentences = [];
             var curIndex = event.results.length - 1;
@@ -1528,25 +1540,36 @@ var newRecognizerFactory = function (recognition) {
             }
             incomingSentencesHandler(sentences.filter(function (s) { return !!s; }));
         };
-        var startListening = function () {
-            recognition.onresult = resultHandler;
-        };
-        var stopListening = function () {
-            recognition.onresult = function () { return false; };
+        recognition.onend = function () {
+            isListening = false;
+            endListeningHandler();
         };
         var start = function () {
-            startListening();
+            isListening = true;
+            recognition.onresult = resultHandler;
             recognition.start();
         };
         var stop = function () {
-            stopListening();
-            recognition.stop();
+            if (isListening) {
+                recognition.stop();
+            }
+            isListening = false;
+        };
+        var abort = function () {
+            recognition.onresult = function () { return false; };
+            if (isListening) {
+                recognition.abort();
+            }
+            stop();
         };
         return {
             start: start,
             stop: stop,
-            startListening: startListening,
-            stopListening: stopListening
+            abort: abort,
+            isListening: function () { return isListening; },
+            onEnd: function (endHandler) {
+                endListeningHandler = endHandler;
+            },
         };
     };
 };
